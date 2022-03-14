@@ -138,8 +138,11 @@ export default class HoneyworksSendGridAPI {
   async syncContacts() {
     const apiKey = this._secretsAPI.get('hummhive', 'sendGridApiKey');
     const members = await this._memberAPI.list();
-    const membersEmails = members.filter(x => x.email !== null)
-    .map(str => ({email: str.email}))
+    const membersEmails = members.filter(x => x.content.email !== null)
+    .map(str => ({email: str.content.email}))
+    if(membersEmails.length === 0){
+      return null;
+    }
     const res = await fetch(`${this._baseURL}/marketing/contacts`, {
       method: 'PUT',
       headers: {
@@ -187,7 +190,9 @@ export default class HoneyworksSendGridAPI {
     const apiKey = this._secretsAPI.get('hummhive', 'sendGridApiKey');
     const hive = await getRecoil(withActiveHive);
     const groups = await this.getSuppressionGroups();
-    await this.deleteSuppressionGroups(groups.find(group => group.name === "Your Humm Hive Supression Group"));
+    const supressionGroup = groups.find(group => group.name === "HummHive Supression Group");
+    if(supressionGroup)
+    await this.deleteSuppressionGroups(supressionGroup);
     const res = await fetch(`${this._baseURL}/asm/groups`, {
       method: 'POST',
       headers: {
@@ -195,7 +200,7 @@ export default class HoneyworksSendGridAPI {
         'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-        "name": "Your Humm Hive Supression Group",
+        "name": "HummHive Supression Group",
         "description": "Default Supression Group for your Humm Hive",
         "is_default": true,
     }),
@@ -227,9 +232,10 @@ export default class HoneyworksSendGridAPI {
     return res;
   }
 
-  async deleteSuppressionGroups(group_id) {
+  async deleteSuppressionGroups(group) {
+    console.log(id)
     const apiKey = this._secretsAPI.get('hummhive', 'sendGridApiKey');
-    const res = await fetch(`${this._baseURL}/asm/groups/${group_id}`, {
+    const res = await fetch(`${this._baseURL}/asm/groups/${group.id}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -239,7 +245,7 @@ export default class HoneyworksSendGridAPI {
       if (!res.ok) {
         return;
       }
-      return res.json();
+      return;
     });
 
     return res;

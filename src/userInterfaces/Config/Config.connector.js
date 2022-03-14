@@ -91,6 +91,8 @@ const mapProps = () => {
   const syncMembers = async () => {
     try {
       const getJob = await honeyworksSendGridAPI.syncContacts();
+      if(!getJob)
+      return notificationsAPI.add('No Hive Members with Email Address to Sync!', 'alert');
       await updateconnectionConfig(connectionId, {
         ...connectionConfig.content,
         members_synced: false,

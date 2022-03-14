@@ -97,7 +97,7 @@ if (connectionConfig?.content.stepCompleted === 1)
   if (connectionConfig?.content.stepCompleted === 2)
     return (
       <Container>
-        Your Twilio Sendgrid is now connected!
+        <strong>Your Twilio Sendgrid is now connected!</strong>
         <Row>
       <span>You are sending emails as: {connectionConfig.content.verified_sender_email}</span>
       </Row>
