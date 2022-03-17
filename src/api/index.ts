@@ -233,7 +233,6 @@ export default class HoneyworksSendGridAPI {
   }
 
   async deleteSuppressionGroups(group) {
-    console.log(id)
     const apiKey = this._secretsAPI.get('hummhive', 'sendGridApiKey');
     const res = await fetch(`${this._baseURL}/asm/groups/${group.id}`, {
       method: 'DELETE',
@@ -319,7 +318,7 @@ export default class HoneyworksSendGridAPI {
         'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-      "send_at": "now"
+      "send_at": "nowt"
     }),
     }).then(async (res) => {
       if (!res.ok) {
@@ -331,7 +330,7 @@ export default class HoneyworksSendGridAPI {
     return res;
   }
 
-  async sendAll(title: string, storyUrl: string, date: string, content: string) {
+  async sendAll(title: string, id: string, url: string, date: string, content: string) {
     const hive = await getRecoil(withActiveHive);
     const config = await this._connectionAPI.getConfig(
       this.connectionDefinition.connectionId
@@ -339,7 +338,7 @@ export default class HoneyworksSendGridAPI {
     if(!content)
     throw new Error("Newsletter can't be sent without content!");
     const apiKey = this._secretsAPI.get('hummhive', 'sendGridApiKey');
-    const buildEmailTemplate = emailTemplate(hive.content.name, storyUrl, date, title, content);
+    const buildEmailTemplate = emailTemplate(hive, id, url, date, title, content);
     const res = await fetch(`${this._baseURL}/marketing/singlesends`, {
       method: 'POST',
       headers: {
