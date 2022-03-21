@@ -318,7 +318,7 @@ export default class HoneyworksSendGridAPI {
         'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-      "send_at": "nowt"
+      "send_at": "now"
     }),
     }).then(async (res) => {
       if (!res.ok) {
