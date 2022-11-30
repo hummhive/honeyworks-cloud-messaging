@@ -11,10 +11,11 @@ import Config from './Config';
 import packageJson from '../../../package.json';
 
 const path = window.require('path');
-const connectionId = 'honeyworks-cloud-messaging';
+const connectionId = 'hummhive-notify';
 const mapProps = () => {
-  const honeyworksSendGridAPI = useApi(Symbol.for('messaging'), connectionId);
+  const honeyworksSendGridAPI = useApi(Symbol.for('notify'), connectionId);
   const notificationsAPI = useApi(Symbol.for('notification'));
+  const backgroundTasksApi = useApi(Symbol.for('background-task'));
   const hive = useRecoilValueLoadable(withActiveHive).valueMaybe();
   const updateconnectionConfig = useUpdateConnectionConfig();
   const connectionConfig = useRecoilValueLoadable(
@@ -25,21 +26,30 @@ const mapProps = () => {
   const [apiKeyInput, setKeyApiInput] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [sendersList, setSendersList] = React.useState(null);
+  const [sendersOptions, setSendersOptions] = React.useState(null);
+  const [senderVerified, setSendersVerified] = React.useState(null);
+  const [isLoadingSender, setIsLoadingSender] = React.useState(false);
 
   React.useEffect(() => {
     if (connectionConfig && connectionConfig?.content.jobId !== null)
       syncStatus();
   }, [connectionConfig]);
 
+  React.useEffect(() => {
+    if (connectionConfig && connectionConfig?.content.stepCompleted === 1){
+      getSenders();
+    }
+  }, [connectionConfig]);
+
   const connectSendGridAccount = async () => {
     try {
       setIsLoading(true);
       const data = await honeyworksSendGridAPI.setup(apiKeyIdInput, apiKeyInput);
-      const senders = await honeyworksSendGridAPI.checkVerifiedSenders();
-      const supressionGroup = await honeyworksSendGridAPI.createSuppressionGroup();
+      const senders = await honeyworksSendGridAPI.checkVerifiedSenders(apiKeyIdInput, apiKeyInput);
+      const supressionGroup = await honeyworksSendGridAPI.createSuppressionGroup(apiKeyIdInput, apiKeyInput);
       const config = {
         api_key_id: data.api_key_id,
-        domain_verified: senders.results.domain_verified,
+        api_key: apiKeyInput,
         sender_verified: senders.results.sender_verified,
         members_synced: false,
         verified_sender_id: null,
@@ -56,15 +66,16 @@ const mapProps = () => {
     }
   };
 
-  const checkSenders = async () => {
+  const getSenders = async () => {
     try {
-      const data = await honeyworksSendGridAPI.checkVerifiedSenders();
-      await updateconnectionConfig(connectionId, {
-        ...connectionConfig.content,
-        domain_verified: data.results.domain_verified,
-        sender_verified: data.results.sender_verified,
-      });
+      setIsLoadingSender(true);
+      const getSenders = await honeyworksSendGridAPI.getVerifiedSenders();
+      const senderList = getSenders.results.map(sender => ({value: sender.id, label: sender.from_email}));
+      setSendersOptions(senderList);
+      setIsLoadingSender(false);
+      return getSenders.results;
     } catch (err) {
+      setIsLoading(false);
       notificationsAPI.add(err, 'error');
     }
   };
@@ -72,9 +83,9 @@ const mapProps = () => {
   const confirmSenders = async () => {
     try {
       setIsLoading(true);
-      const data = await honeyworksSendGridAPI.checkVerifiedSenders();
       const getSenders = await honeyworksSendGridAPI.getVerifiedSenders();
-      const getVerifiedSender = getSenders.results.find(sender => sender.verified === true);
+      const getVerifiedSender = getSenders.results.find(sender => sender.id === sendersList.value);
+      if(getVerifiedSender)
       await updateconnectionConfig(connectionId, {
         ...connectionConfig.content,
         verified_sender_id: getVerifiedSender.id,
@@ -82,6 +93,8 @@ const mapProps = () => {
         stepCompleted: 2
       });
       setIsLoading(false);
+      if(!getVerifiedSender)
+      notificationsAPI.add("This email has not been verified with SendGrid", 'error');
     } catch (err) {
       setIsLoading(false);
       notificationsAPI.add(err, 'error');
@@ -90,56 +103,96 @@ const mapProps = () => {
 
   const syncMembers = async () => {
     try {
+      setIsLoading(true);
       const getJob = await honeyworksSendGridAPI.syncContacts();
-      if(!getJob)
+      if(!getJob){
+      setIsLoading(false);
       return notificationsAPI.add('No Hive Members with Email Address to Sync!', 'alert');
+      }
       await updateconnectionConfig(connectionId, {
         ...connectionConfig.content,
         members_synced: false,
-        jobId: getJob.job_id
+        jobId: getJob.jobs_id
       });
     } catch (err) {
+      setIsLoading(false);
       notificationsAPI.add(err, 'error');
+    }
+  };
+
+  const deleteUsers = async () => {
+    try {
+      await updateconnectionConfig(connectionId, {
+        ...connectionConfig.content,
+        api_key_id: null,
+        members_synced: null,
+        verified_sender_email: null,
+        verified_sender_id: null,
+        sender_verified: null,
+        domain_verified: null,
+        unsubscribe_group_id: null,
+        jobId: null,
+        stepCompleted: null
+      });
+    } catch (err) {
+      notificationsAPI.add(err, "You don't have an account");
     }
   };
 
   const syncStatus = async () => {
     try {
+      if(connectionConfig?.content.jobId === undefined){
+        await updateconnectionConfig(connectionId, {
+          ...connectionConfig.content,
+          jobId: null
+        });
+        return notificationsAPI.add('No Job ID', 'error');
+      }
       let interval;
       watchSyncStatusInterval();
-       async function watchSyncStatusInterval() {
+      const bgTasks = await backgroundTasksApi.add({title: "Syncing Members", message: "Please wait until your hive members are synced"})
+      async function watchSyncStatusInterval() {
+      const prevJobId = [...connectionConfig.content.jobId];
       const jobStage = await honeyworksSendGridAPI.contactStatus(connectionConfig.content.jobId);
       if (!interval){
           interval = setInterval(watchSyncStatusInterval, 5000);
           setIsLoading(true);
        } else if (jobStage.status === "completed") {
+           prevJobId.shift()
            await updateconnectionConfig(connectionId, {
              ...connectionConfig.content,
              members_synced: true,
-             jobId: null
+             jobId: prevJobId.length === 0 ? null : prevJobId,
            });
            setIsLoading(false);
+           await backgroundTasksApi.remove(bgTasks);
            clearInterval(interval);
     }
   }
     } catch (err) {
       notificationsAPI.add(err, 'error');
+      await backgroundTasksApi.remove(bgTasks);
     }
   };
 
   return {
     connectSendGridAccount,
-    checkSenders,
     apiKeyIdInput,
     isLoading,
     confirmSenders,
+    isLoadingSender,
+    sendersOptions,
+    getSenders,
     connectionConfig,
+    deleteUsers,
     sendersList,
+    setSendersList,
     syncStatus,
     syncMembers,
     apiKeyInput,
     setKeyApiIdInput,
-    setKeyApiInput
+    setKeyApiInput,
+    isLoadingSender
   };
 };
 

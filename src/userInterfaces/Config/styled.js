@@ -30,6 +30,9 @@ export const Spacer = styled.div`
 
 export const Row = styled.div`
   display: flex;
+  .select-component{
+    width: 100%;
+  }
 `;
 
 export const CardContainer = styled.div`

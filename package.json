@@ -1,7 +1,7 @@
 {
-  "name": "@honeyworks/cloud-messaging",
+  "name": "@hummhive/notify",
   "version": "1.0.0-beta.3",
-  "description": "",
+  "description": "Notify your Hive members whenever a new story is created",
   "private": false,
   "module": "dist/index.js",
   "scripts": {
@@ -34,16 +34,15 @@
     "webpack-cli": "^4.2.0"
   },
   "dependencies": {
-    "react-color": "^2.19.3"
+    "react-color": "^2.19.3",
+    "react-select": "^5.6.1"
   },
   "humm-connection": {
     "connectionType": "cell",
-    "cellType": "messaging",
-    "title": "Honeyworks SendGrid Plugin",
+    "cellType": "notify",
+    "title": "HummHive Notify",
     "dependencies": [
-      "@honeyworks/editor",
-      "host",
-      "data-bridge"
+      "@hummhive/editor"
     ],
     "description": "Notify your Hive members whenever a new story is created",
     "packageLocation": "",

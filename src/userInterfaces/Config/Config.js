@@ -1,29 +1,35 @@
 import React from 'react';
-import { PrimaryButton, SecondaryButton, Card, Link, Notice, TextInput } from '@hummhive/ui-elements';
+import Select from 'react-select'
+import { PrimaryButton, SecondaryButton, WarningButton, Card, Link, Notice, TextInput } from '@hummhive/ui-elements';
 import { Container, Spacer, CardContainer, Row } from './styled';
 
 export default function Config({
 connectSendGridAccount,
 apiKeyIdInput,
-checkSenders,
 confirmSenders,
+getSenders,
 apiKeyInput,
 connectionConfig,
+sendersOptions,
 syncMembers,
 sendersList,
+isLoadingSender,
+setSendersList,
+deleteUsers,
 isLoading,
 setKeyApiIdInput,
 setKeyApiInput
 }) {
+
   if (!connectionConfig?.content.api_key_id)
     return (
       <Container>
-        <h3>Step 1: Connect your Hive with Twilio SendGrid</h3>
+        <h3>Step 1: Connect your Hive with SendGrid</h3>
         <span>For starters, to use this plugin, you need a valid Sendgrid account and an API key.</span>
         <span>If you don't have a SendGrind Account,{' '}
             <Link
               target="_blank"
-              href="https://sendgrid.com"
+              href="https://signup.sendgrid.com/"
             >
               you can create one here.
             </Link>
@@ -64,30 +70,26 @@ setKeyApiInput
 if (connectionConfig?.content.stepCompleted === 1)
   return (
     <Container>
-      <h3>Step 2: Send your first emails with Twilio SendGrid</h3>
+      <h3>Step 2: Send your first emails with SendGrid</h3>
       <span>Before sending email you’ll need to create at least one sender identity.
-      If you haven't done it, you can do it <a href="https://app.sendgrid.com/guide" target="_blank">here.</a></span>
-    <Spacer height={8} />
+      If you haven't done it, you can do it <a href="https://mc.sendgrid.com/senders/new" target="_blank">here.</a></span>
+    <Spacer height={14} />
+    <Row>
+        {sendersOptions?.length > 0 ? (
+        <Select className="select-component" placeholder="Please chose an email" options={sendersOptions} value={sendersList} onChange={(e) => setSendersList(e)} />
+        ) : (
+        <span>No Senders found! <a href="https://mc.sendgrid.com/senders/new" target="_blank"></a>please go here and make sure you have at least one Sender available!</span>
+        )}
+    </Row>
+  <Spacer height={24} />
   <Row>
-  <span>Sender Verified: {connectionConfig.content.sender_verified  ? "✅" : "❌"}</span>
-  </Row>
-  <Spacer height={8} />
-  <Row>
-    <span>Domain Verified: {connectionConfig.content.domain_verified ? "✅" : "❌"} {!connectionConfig.content.domain_verified && connectionConfig.content.sender_verified && (
-          <i>(You can complete this step later!)</i>
-    )}</span>
-  </Row>
-            <Spacer height={24} />
-    {!connectionConfig.content.domain_verified && !connectionConfig.content.sender_verified && (
-      <Row>
-    <PrimaryButton loading={isLoading} onClick={() => checkSenders()}>
-      Check Senders Identities
-    </PrimaryButton>
-  </Row>
-  )}
-  <Spacer height={10} />
-  <Row>
-    <PrimaryButton loading={isLoading} disabled={!connectionConfig.content.domain_verified && !connectionConfig.content.sender_verified} onClick={() => confirmSenders()}>
+    <SecondaryButton loading={isLoadingSender} onClick={() => getSenders()}>
+    Check for new Senders...
+    </SecondaryButton>
+        </Row>
+          <Spacer height={14} />
+          <Row>
+    <PrimaryButton loading={isLoading} disabled={!sendersList} onClick={() => confirmSenders()}>
     Continue
     </PrimaryButton>
     </Row>
@@ -97,7 +99,7 @@ if (connectionConfig?.content.stepCompleted === 1)
   if (connectionConfig?.content.stepCompleted === 2)
     return (
       <Container>
-        <strong>Your Twilio Sendgrid is now connected!</strong>
+        <strong>Your Sendgrid account is now connected!</strong>
         <Row>
       <span>You are sending emails as: {connectionConfig.content.verified_sender_email}</span>
       </Row>
@@ -107,6 +109,12 @@ if (connectionConfig?.content.stepCompleted === 1)
         {isLoading ? "Syncing Hive Members with SendGrid" : "Sync Hive Members with SendGrid"}
       </PrimaryButton>
     </Row>
+    <Spacer height={12} />
+    <Row>
+    <WarningButton onClick={() => deleteUsers()}>Disconnect Account from SendGrid</WarningButton>
+  </Row>
       </Container>
     );
+
+    return  <WarningButton onClick={() => deleteUsers()}>Disconnect Account from SendGrid</WarningButton>
 };
