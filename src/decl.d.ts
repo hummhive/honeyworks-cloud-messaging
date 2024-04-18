@@ -12,3 +12,4 @@ declare module '@hummhive/state/invite';
 declare module '@hummhive/state/member';
 declare module '@hummhive/state/connection';
 declare module '@hummhive/state/ui';
+declare module '*.png';

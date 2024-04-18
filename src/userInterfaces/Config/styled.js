@@ -46,3 +46,34 @@ export const CardContainer = styled.div`
     margin-right: 0;
   }
 `;
+
+export const TutorialImg = styled.img`
+  border-radius: 16px;
+  width: ${props => props.isPortrait ? 'auto' : '100%'};
+  height: ${props => props.isPortrait ? '400px' : 'auto'};
+  object-fit: contain;
+  border: 2px solid ${props => props.theme.main.textVariant};
+  cursor: zoom-in;
+  margin: 32px 0;
+`;
+
+export const FullscreenImg = styled.div`
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 16px;
+  position: fixed;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 10;
+  cursor: zoom-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+`;
