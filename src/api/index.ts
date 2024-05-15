@@ -1,8 +1,8 @@
 import { injectable, inject, optional } from 'inversify';
-import { getRecoil } from 'recoil-nexus';
-import { withActiveHive } from '@hummhive/state/hive';
+import HiveStore from '@hummhive/state/hive';
 import appendProvider from '../utils/appendProvider';
 import packageJson from '../../package.json';
+import StateStore from '@hummhive/state';
 
 @injectable()
 export default class HoneyworksSendGridAPI {
@@ -11,7 +11,6 @@ export default class HoneyworksSendGridAPI {
   _baseURL: string = 'https://api.sendgrid.com/v3';
   // _baseURL: string = 'http://127.0.0.1:8787';
 
-  _secrets;
   _notifications;
   _hive;
   _publisher;
@@ -20,9 +19,9 @@ export default class HoneyworksSendGridAPI {
   _cellApi;
   _memberAPI;
   _cryptoUtilsAPI;
-  _secretsAPI;
   _eventsAPI;
   _connectionAPI;
+  _utilApi;
 
   constructor(
     @inject(Symbol.for('notification')) notifications,
@@ -33,21 +32,20 @@ export default class HoneyworksSendGridAPI {
     @inject(Symbol.for('member')) memberAPI,
     @inject(Symbol.for('event')) events,
     @inject(Symbol.for('crypto-util')) cryptoUtilsAPI,
-    @inject(Symbol.for('secret')) secretsAPI,
     @inject(Symbol.for('cell')) cell,
     @inject(Symbol.for('connection')) connectionAPI,
     @inject(Symbol.for('event')) eventsAPI,
-    @inject(Symbol.for('util')) utilAPI
+    @inject(Symbol.for('util')) utilApi
   ) {
     this._notifications = notifications;
     this._hive = hive;
     this._publisher = publisher;
+    this._utilApi = utilApi;
     this._groupAPI = groupAPI;
     this._blobAPI = blobAPI;
     this._memberAPI = memberAPI;
     this._cellApi = cell;
     this._cryptoUtilsAPI = cryptoUtilsAPI;
-    this._secretsAPI = secretsAPI;
     this._connectionAPI = connectionAPI;
     this._eventsAPI = eventsAPI;
     this.connectionDefinition =
@@ -67,10 +65,7 @@ export default class HoneyworksSendGridAPI {
   }
 
   registerForEvents() {
-    this._eventsAPI.on(
-      'memberAdded',
-      this.handleMembersSyncEvent.bind(this)
-    );
+    this._eventsAPI.on('memberAdded', this.handleMembersSyncEvent.bind(this));
     this._eventsAPI.on(
       'memberAddedBatch',
       this.handleMembersSyncEvent.bind(this)
@@ -84,10 +79,7 @@ export default class HoneyworksSendGridAPI {
       //this.handleMembersSyncEvent.bind(this)
       () => {}
     );
-    this._eventsAPI.on(
-      'memberRemoved',
-      this.handleMembersSyncEvent.bind(this)
-    );
+    this._eventsAPI.on('memberRemoved', this.handleMembersSyncEvent.bind(this));
     this._eventsAPI.on(
       'memberRemovedBatch',
       this.handleMembersSyncEvent.bind(this)
@@ -107,13 +99,11 @@ export default class HoneyworksSendGridAPI {
       this.connectionDefinition.connectionId
     );
 
-    return (
-      !!config
-    );
+    return !!config;
   }
 
   async handleMembersSyncEvent() {
-      await this.syncContacts();
+    await this.syncContacts();
   }
 
   async setup(sendGridKeyId: string, sendGridKey: string) {
@@ -121,11 +111,13 @@ export default class HoneyworksSendGridAPI {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + sendGridKey,
+        Authorization: 'Bearer ' + sendGridKey,
       },
     }).then(async (res) => {
       if (!res.ok) {
-        throw new Error("Unauthorized: Double check that your API ID and Key are correct!");
+        throw new Error(
+          'Unauthorized: Double check that your API ID and Key are correct!'
+        );
       }
       return await res.json();
     });
@@ -134,15 +126,20 @@ export default class HoneyworksSendGridAPI {
   }
 
   async checkVerifiedSenders(sendGridKeyId: string, sendGridKey: string) {
-    const res = await fetch(`${this._baseURL}/verified_senders/steps_completed`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + sendGridKey,
-      },
-    }).then(async (res) => {
+    const res = await fetch(
+      `${this._baseURL}/verified_senders/steps_completed`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + sendGridKey,
+        },
+      }
+    ).then(async (res) => {
       if (!res.ok) {
-        throw new Error("Unauthorized: Double check that your API ID and Key are correct!");
+        throw new Error(
+          'Unauthorized: Double check that your API ID and Key are correct!'
+        );
       }
       return await res.json();
     });
@@ -151,21 +148,32 @@ export default class HoneyworksSendGridAPI {
   }
 
   async syncContacts() {
-    const hive = await getRecoil(withActiveHive);
+    const hiveId = this._utilApi.activeHiveId;
 
     const getGroups = await this._groupAPI.list();
 
-    const getMembersAndGroups = await Promise.all(getGroups.map(async (group) => {
-      let groupMembers = await this._memberAPI.listByGroups([group.header.id]);
-      const membersEmails = groupMembers.filter(member => !!member.content.email)
-      .map(str => ({email: str.content.email}))
-      return ({list_name: group.content.name, list_ids: [`${hive.header.id}_${group.header.id}`], contacts: membersEmails});
-    }));
+    const getMembersAndGroups = await Promise.all(
+      getGroups.map(async (group) => {
+        let groupMembers = await this._memberAPI.listByGroups([
+          group.header.id,
+        ]);
+        const membersEmails = groupMembers
+          .filter((member) => !!member.content.email)
+          .map((str) => ({ email: str.content.email }));
+        return {
+          list_name: group.content.name,
+          list_ids: [`${hiveId}_${group.header.id}`],
+          contacts: membersEmails,
+        };
+      })
+    );
 
     const members = await this._memberAPI.list();
-    const membersEmails = members.filter(x => !!x.content.email).map(str => ({email: str.content.email}))
+    const membersEmails = members
+      .filter((x) => !!x.content.email)
+      .map((str) => ({ email: str.content.email }));
 
-    if(membersEmails.length === 0){
+    if (membersEmails.length === 0) {
       return null;
     }
     const config = await this._connectionAPI.getConfig(
@@ -177,73 +185,88 @@ export default class HoneyworksSendGridAPI {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey,
+        Authorization: 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-        "contacts": membersEmails,
-    }),
-    }).then(response => response.json())
-    .then(data => {
-      return data;
+        contacts: membersEmails,
+      }),
     })
-    .catch((error) => {
-      return error;
-    });
+      .then((response) => response.json())
+      .then((data) => {
+        return data;
+      })
+      .catch((error) => {
+        return error;
+      });
 
-    const createList = await Promise.all(getMembersAndGroups.map(async (group) => {
-      return await fetch(`${this._baseURL}/marketing/lists`, {
+    const createList = await Promise.all(
+      getMembersAndGroups.map(async (group) => {
+        return await fetch(`${this._baseURL}/marketing/lists`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + apiKey,
+            Authorization: 'Bearer ' + apiKey,
           },
           body: JSON.stringify({
-            name: `${group.list_ids[0]}`
+            name: `${group.list_ids[0]}`,
           }),
-        }).then(response => response.json())
-        .then(data => {
-          return data;
         })
-        .catch((error) => {
-          return error;
-        });
-    }));
-
-    const getLists = await fetch(`${this._baseURL}/marketing/lists`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + apiKey,
-          }
-        }).then(response => response.json())
-        .then(data => {
-          return data;
-        })
-        .catch((error) => {
-          return error;
-        });
-
-        const syncGroupsAndMembers = await Promise.all(getMembersAndGroups.filter(group => group.contacts.length !== 0).map(async (group) => {
-          const getList = await getLists.result.find(list => list.name === `${group.list_ids[0]}`)
-          if(!getList) return;
-          return await fetch(`${this._baseURL}/marketing/contacts`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + apiKey,
-            },
-            body: JSON.stringify({list_ids: [getList.id], contacts: group.contacts}),
-          }).then(response => response.json())
-          .then(data => {
+          .then((response) => response.json())
+          .then((data) => {
             return data;
           })
           .catch((error) => {
             return error;
           });
-        }));
+      })
+    );
+
+    const getLists = await fetch(`${this._baseURL}/marketing/lists`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + apiKey,
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        return data;
+      })
+      .catch((error) => {
+        return error;
+      });
+
+    const syncGroupsAndMembers = await Promise.all(
+      getMembersAndGroups
+        .filter((group) => group.contacts.length !== 0)
+        .map(async (group) => {
+          const getList = await getLists.result.find(
+            (list) => list.name === `${group.list_ids[0]}`
+          );
+          if (!getList) return;
+          return await fetch(`${this._baseURL}/marketing/contacts`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer ' + apiKey,
+            },
+            body: JSON.stringify({
+              list_ids: [getList.id],
+              contacts: group.contacts,
+            }),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              return data;
+            })
+            .catch((error) => {
+              return error;
+            });
+        })
+    );
 
     return {
-      jobs_id: [...syncGroupsAndMembers, syncAllContacts]
+      jobs_id: [...syncGroupsAndMembers, syncAllContacts],
     };
   }
 
@@ -252,13 +275,16 @@ export default class HoneyworksSendGridAPI {
       this.connectionDefinition.connectionId
     );
     const apiKey = config.content.api_key;
-    const res = await fetch(`${this._baseURL}/marketing/contacts/imports/` + jobId[0].job_id, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey,
-      },
-    }).then(async (res) => {
+    const res = await fetch(
+      `${this._baseURL}/marketing/contacts/imports/` + jobId[0].job_id,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + apiKey,
+        },
+      }
+    ).then(async (res) => {
       if (!res.ok) {
         return;
       }
@@ -269,22 +295,23 @@ export default class HoneyworksSendGridAPI {
   }
 
   async createSuppressionGroup(sendGridKeyId: string, sendGridKey: string) {
-    const hive = await getRecoil(withActiveHive);
     const groups = await this.getSuppressionGroups(sendGridKey);
-    const supressionGroup = groups.find(group => group.name === "HummHive Supression Group");
-    if(supressionGroup)
-    await this.deleteSuppressionGroups(supressionGroup, sendGridKey);
+    const supressionGroup = groups.find(
+      (group) => group.name === 'HummHive Supression Group'
+    );
+    if (supressionGroup)
+      await this.deleteSuppressionGroups(supressionGroup, sendGridKey);
     const res = await fetch(`${this._baseURL}/asm/groups`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + sendGridKey,
+        Authorization: 'Bearer ' + sendGridKey,
       },
       body: JSON.stringify({
-        "name": "HummHive Supression Group",
-        "description": "Default Supression Group for your Humm Hive",
-        "is_default": true,
-    }),
+        name: 'HummHive Supression Group',
+        description: 'Default Supression Group for your Humm Hive',
+        is_default: true,
+      }),
     }).then(async (res) => {
       if (!res.ok) {
         return;
@@ -300,7 +327,7 @@ export default class HoneyworksSendGridAPI {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + sendGridKey,
+        Authorization: 'Bearer ' + sendGridKey,
       },
     }).then(async (res) => {
       if (!res.ok) {
@@ -317,7 +344,7 @@ export default class HoneyworksSendGridAPI {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + sendGridKey,
+        Authorization: 'Bearer ' + sendGridKey,
       },
     }).then(async (res) => {
       if (!res.ok) {
@@ -334,12 +361,11 @@ export default class HoneyworksSendGridAPI {
       this.connectionDefinition.connectionId
     );
     const apiKey = config.content.api_key;
-    const hive = await getRecoil(withActiveHive);
     const res = await fetch(`${this._baseURL}/verified_senders`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey,
+        Authorization: 'Bearer ' + apiKey,
       },
     }).then(async (res) => {
       if (!res.ok) {
@@ -356,18 +382,21 @@ export default class HoneyworksSendGridAPI {
       this.connectionDefinition.connectionId
     );
     const apiKey = config.content.api_key;
-    const res = await fetch(`${this._baseURL}/marketing/singlesends/${id}/schedule`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey,
-      },
-      body: JSON.stringify({
-      "send_at": "now"
-    }),
-    }).then(async (res) => {
+    const res = await fetch(
+      `${this._baseURL}/marketing/singlesends/${id}/schedule`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + apiKey,
+        },
+        body: JSON.stringify({
+          send_at: 'now',
+        }),
+      }
+    ).then(async (res) => {
       if (!res.ok) {
-        throw new Error("Error");
+        throw new Error('Error');
       }
       return await res.json();
     });
@@ -375,51 +404,54 @@ export default class HoneyworksSendGridAPI {
     return res;
   }
 
-  async send({title, content, groups, types}) {
-    const hive = await getRecoil(withActiveHive);
+  async send({ title, content, groups, types }) {
+    const hiveStore = StateStore.getStore(HiveStore.STORE_IDENTIFIER);
+    const hive = hiveStore.all[0];
     const config = await this._connectionAPI.getConfig(
       this.connectionDefinition.connectionId
     );
-    if(!content)
-    throw new Error("Newsletter can't be sent without content!");
+    if (!content) throw new Error("Newsletter can't be sent without content!");
     const apiKey = config.content.api_key;
     const getLists = await fetch(`${this._baseURL}/marketing/lists`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + apiKey,
-          }
-        }).then(response => response.json())
-        .then(data => {
-          return data;
-        })
-        .catch((error) => {
-          return error;
-        });
-    const groupsIds = getLists.result.filter(list => groups.includes(list.name.split("_").pop())).map(list => list.id);
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + apiKey,
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        return data;
+      })
+      .catch((error) => {
+        return error;
+      });
+    const groupsIds = getLists.result
+      .filter((list) => groups.includes(list.name.split('_').pop()))
+      .map((list) => list.id);
 
     const res = await fetch(`${this._baseURL}/marketing/singlesends`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey,
+        Authorization: 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-      "name": title,
-      "send_to": {
-        "list_ids": groupsIds,
-        "all": false,
-      },
-      "email_config": {
-        "subject": title,
-        "suppression_group_id": config.content.unsubscribe_group_id,
-        "sender_id": config.content.verified_sender_id,
-        "html_content": appendProvider(content, hive.content.name),
-      }
-    }),
+        name: title,
+        send_to: {
+          list_ids: groupsIds,
+          all: false,
+        },
+        email_config: {
+          subject: title,
+          suppression_group_id: config.content.unsubscribe_group_id,
+          sender_id: config.content.verified_sender_id,
+          html_content: appendProvider(content, hive.content.name),
+        },
+      }),
     }).then(async (res) => {
       if (!res.ok) {
-        throw new Error("Error");
+        throw new Error('Error');
       }
       const response = await res.json();
       await this.sendSchedule(response.id);
@@ -430,9 +462,10 @@ export default class HoneyworksSendGridAPI {
   }
 
   async sendAll(title: string, content: string, types: string[]) {
-    const hive = await getRecoil(withActiveHive);
-    if(!content)
-    throw new Error("Newsletter can't be sent without content!");
+    const hiveStore = StateStore.getStore(HiveStore.STORE_IDENTIFIER);
+
+    const hive = hiveStore.all[0];
+    if (!content) throw new Error("Newsletter can't be sent without content!");
     const config = await this._connectionAPI.getConfig(
       this.connectionDefinition.connectionId
     );
@@ -441,24 +474,24 @@ export default class HoneyworksSendGridAPI {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey,
+        Authorization: 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
-      "name": title,
-      "send_to": {
-        "list_ids": [],
-        "all": true
-      },
-      "email_config": {
-        "subject": title,
-        "suppression_group_id": config.content.unsubscribe_group_id,
-        "sender_id": config.content.verified_sender_id,
-        "html_content": appendProvider(content, hive.content.name),
-      }
-    }),
+        name: title,
+        send_to: {
+          list_ids: [],
+          all: true,
+        },
+        email_config: {
+          subject: title,
+          suppression_group_id: config.content.unsubscribe_group_id,
+          sender_id: config.content.verified_sender_id,
+          html_content: appendProvider(content, hive.content.name),
+        },
+      }),
     }).then(async (res) => {
       if (!res.ok) {
-        throw new Error("Error");
+        throw new Error('Error');
       }
       const response = await res.json();
       await this.sendSchedule(response.id);
@@ -467,5 +500,4 @@ export default class HoneyworksSendGridAPI {
 
     return res;
   }
-
 }
