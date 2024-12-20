@@ -1,6 +1,6 @@
 {
   "name": "@hummhive/notify",
-  "version": "1.0.0-beta.7",
+  "version": "1.1.0-beta.0",
   "description": "Notify your Hive members whenever a new story is created",
   "private": false,
   "module": "dist/index.js",
